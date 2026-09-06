@@ -294,6 +294,7 @@
       const instanceId = `${Date.now().toString(36)}-${serial.toString(36)}-${Math.random().toString(36).slice(2)}`;
       const listeners = new Set();
       const runtime = {
+        disposed: false,
         id: instanceId,
         source: SOURCE,
         tokenDisposer: null,
@@ -319,22 +320,23 @@
         selectTeam(id) {
           applyTeam(this, theme, findTeam(id));
         },
-        applyWallpaperUrl(url) {
+        applyWallpaperUrl(url, teamId = this.currentTeamId()) {
+          if (this.disposed) return;
           if (typeof url !== "string" || url === "") return;
-          const teamId = this.currentTeamId();
           if (this.wallpapers[teamId] === url) return;
           this.wallpapers = { ...this.wallpapers, [teamId]: url };
           writeWallpaperMap(this.wallpapers);
-          applyTeam(this, theme, findTeam(teamId));
+          applyTeam(this, theme, findTeam(this.currentTeamId()));
         },
         async uploadWallpaper(file) {
           if (!file) throw new Error("no file selected");
+          const teamId = this.currentTeamId();
           const res = await fetch("/plugin-assets/dsh-f1-skin-custom/upload", { method: "POST", body: file });
           if (!res.ok) throw new Error(`upload failed (${res.status})`);
           const payload = await res.json().catch(() => null);
           const url = payload && typeof payload.url === "string" ? payload.url : null;
           if (!url) throw new Error("upload response missing url");
-          this.applyWallpaperUrl(url);
+          this.applyWallpaperUrl(url, teamId);
           return url;
         },
         async deleteWallpaper(url) {
@@ -344,6 +346,7 @@
             body: JSON.stringify({ url })
           });
           if (!res.ok) throw new Error(`delete failed (${res.status})`);
+          if (this.disposed) return false;
           let changed = false;
           const next = {};
           for (const key of Object.keys(this.wallpapers)) {
@@ -389,6 +392,7 @@
       }, SettingsSection));
 
       ctx.on("dispose", () => {
+        runtime.disposed = true;
         listeners.clear();
         if (runtime.tokenDisposer) runtime.tokenDisposer();
         runtime.tokenDisposer = null;

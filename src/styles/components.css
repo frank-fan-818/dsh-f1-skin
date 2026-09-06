@@ -30,7 +30,8 @@
   box-shadow: 0 10px 26px rgba(0,0,0,.10), inset 0 1px 0 rgba(255,255,255,.08);
 }
 
-.Sxvs8a_root {
+/* DSH 0.1.2 ui-chat selectors and 0.1.1 conversation selectors. */
+:is(.hWmORq_root, .Sxvs8a_root) {
   box-sizing: border-box;
   padding: 18px 20px;
   border: 0;
@@ -40,14 +41,14 @@
     color-mix(in srgb, var(--f1-panel) min(94%, calc(var(--f1-surface-strength) + 8%)), transparent));
   box-shadow: 0 16px 40px rgba(0,0,0,.10);
 }
-.Sxvs8a_root :where(table, th, td) {
+:is(.hWmORq_root, .Sxvs8a_root) :where(table, th, td) {
   border-color: color-mix(in srgb, var(--dsw-alias-border-l2) 58%, transparent);
 }
-.Sxvs8a_root table th,
-.Sxvs8a_root table td { padding: 12px 14px; }
+:is(.hWmORq_root, .Sxvs8a_root) table th,
+:is(.hWmORq_root, .Sxvs8a_root) table td { padding: 12px 14px; }
 
-.Sxvs8a_root table th:first-child,
-.Sxvs8a_root table td:first-child { padding-left: 14px; }
+:is(.hWmORq_root, .Sxvs8a_root) table th:first-child,
+:is(.hWmORq_root, .Sxvs8a_root) table td:first-child { padding-left: 14px; }
 
 .uV2eYG_card {
   border-color: color-mix(in srgb, var(--f1-accent) 32%, var(--dsw-alias-border-l2));
@@ -56,7 +57,7 @@
 }
 .uV2eYG_input { caret-color: var(--f1-accent); }
 
-.gdEzaW_bubble {
+:is(.Sixlwa_bubble, .gdEzaW_bubble) {
   border-color: color-mix(in srgb, var(--f1-accent) 28%, transparent);
   background: color-mix(in srgb, var(--f1-panel-2) min(98%, calc(var(--f1-surface-strength) + 14%)), transparent);
   box-shadow: inset -3px 0 0 var(--f1-accent);
@@ -64,34 +65,34 @@
 
 /* State color is an inset marker rather than padding/borders; fixed-height
    shell/tool rows therefore keep every native label and action visible. */
-.QWLzlG_root,
+:is(.lcKema_root, .QWLzlG_root),
 .o3BgMG_root,
 .CY-8Ka_root {
   border-radius: 4px;
   background: color-mix(in srgb, var(--f1-panel-2) 94%, transparent);
   box-shadow: 0 7px 18px rgba(0,0,0,.08);
 }
-.QWLzlG_row,
+:is(.lcKema_row, .QWLzlG_row),
 .o3BgMG_row,
 .CY-8Ka_root {
   box-sizing: border-box;
   padding-inline: 12px 10px;
 }
-.QWLzlG_title,
+:is(.lcKema_title, .QWLzlG_title),
 .o3BgMG_title,
 .CY-8Ka_title { color: var(--dsw-alias-label-primary); }
-.QWLzlG_summary,
+:is(.lcKema_summary, .QWLzlG_summary),
 .o3BgMG_fileLink { color: var(--dsw-alias-label-secondary); }
-.QWLzlG_root[data-state="running"],
+:is(.lcKema_root, .QWLzlG_root)[data-state="running"],
 .o3BgMG_root[data-state="running"],
 .CY-8Ka_root[data-state="running"] { box-shadow: inset 3px 0 0 var(--f1-warning), 0 7px 18px rgba(0,0,0,.08); }
-.QWLzlG_root[data-state="ok"],
+:is(.lcKema_root, .QWLzlG_root)[data-state="ok"],
 .o3BgMG_root[data-state="ok"],
 .CY-8Ka_root[data-state="ok"] { box-shadow: inset 3px 0 0 var(--f1-success), 0 7px 18px rgba(0,0,0,.08); }
-.QWLzlG_root[data-state="error"],
+:is(.lcKema_root, .QWLzlG_root)[data-state="error"],
 .o3BgMG_root[data-state="error"],
 .CY-8Ka_root[data-state="error"] { box-shadow: inset 3px 0 0 var(--f1-danger), 0 7px 18px rgba(0,0,0,.08); }
-.QWLzlG_root[data-state="stopped"],
+:is(.lcKema_root, .QWLzlG_root)[data-state="stopped"],
 .o3BgMG_root[data-state="stopped"],
 .CY-8Ka_root[data-state="stopped"] { box-shadow: inset 3px 0 0 var(--f1-muted), 0 7px 18px rgba(0,0,0,.08); }
 

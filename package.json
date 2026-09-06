@@ -29,7 +29,8 @@
     "build": "node scripts/build.mjs",
     "check": "node scripts/check.mjs",
     "release:check": "node scripts/release-check.mjs",
-    "quality": "npm run build && npm run check && npm run release:check",
+    "quality": "npm run build && npm run test:unit && npm run check && npm run release:check",
+    "test:unit": "node --test tests/unit/*.test.mjs",
     "test:e2e": "playwright test",
     "test:e2e:update": "playwright test --update-snapshots",
     "prepublishOnly": "npm run quality"

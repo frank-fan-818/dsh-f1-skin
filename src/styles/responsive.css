@@ -1,11 +1,11 @@
 @media (max-width: 760px) {
   body::before { background-position: var(--f1-cockpit-mobile-position, center); }
   .pXSMma_headline { padding: 8px 15px 9px 14px; }
-  .Sxvs8a_root { padding: 14px 15px; }
-  .Sxvs8a_root table th,
-  .Sxvs8a_root table td { padding: 10px 11px; }
-  .Sxvs8a_root table th:first-child,
-  .Sxvs8a_root table td:first-child { padding-left: 11px; }
+  :is(.hWmORq_root, .Sxvs8a_root) { padding: 14px 15px; }
+  :is(.hWmORq_root, .Sxvs8a_root) table th,
+  :is(.hWmORq_root, .Sxvs8a_root) table td { padding: 10px 11px; }
+  :is(.hWmORq_root, .Sxvs8a_root) table th:first-child,
+  :is(.hWmORq_root, .Sxvs8a_root) table td:first-child { padding-left: 11px; }
   .dsh-f1-settings__grid { grid-template-columns: 1fr; }
   .dsh-f1-settings__header { flex-direction: column; }
   .dsh-f1-settings__status { align-self: flex-start; }
@@ -37,17 +37,17 @@ html[data-f1-motion="off"] .YDXeBa_sessionRow.YDXeBa_selected::after {
 }
 
 html[data-f1-motion="off"] :where(
-  .QWLzlG_root[data-state="running"],
+  :is(.lcKema_root, .QWLzlG_root)[data-state="running"],
   .o3BgMG_root[data-state="running"],
   .CY-8Ka_root[data-state="running"]
 ),
 html[data-f1-motion="off"] :where(
-  .QWLzlG_root[data-state="running"],
+  :is(.lcKema_root, .QWLzlG_root)[data-state="running"],
   .o3BgMG_root[data-state="running"],
   .CY-8Ka_root[data-state="running"]
 )::before,
 html[data-f1-motion="off"] :where(
-  .QWLzlG_root[data-state="running"] .QWLzlG_row,
+  :is(.lcKema_root, .QWLzlG_root)[data-state="running"] :is(.lcKema_row, .QWLzlG_row),
   .o3BgMG_root[data-state="running"] .o3BgMG_row,
   .CY-8Ka_root[data-state="running"]
 )::after { animation: none !important; transition: none !important; }

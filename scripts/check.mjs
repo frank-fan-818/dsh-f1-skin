@@ -127,13 +127,13 @@ if (/https?:\/\//i.test(css) || /@import\s/i.test(css)) fail("CSS has an externa
 else ok("CSS is self-contained (no @import/http assets)");
 if (!css.includes('[data-state="running"]') || !css.includes('[data-state="ok"]') || !css.includes('[data-state="error"]') || !css.includes('[data-state="stopped"]')) fail("CSS lacks semantic tool states");
 else ok("semantic running/ok/error/stopped states present");
-if (!css.includes(".pXSMma_headline") || !css.includes(".Sxvs8a_root") || !css.includes(".uV2eYG_card") || !css.includes(".o3BgMG_root")) fail("CSS lacks hero/reading/composer/tool component coverage");
+if (!css.includes(".pXSMma_headline") || !css.includes(":is(.hWmORq_root, .Sxvs8a_root)") || !css.includes(".uV2eYG_card") || !css.includes(".o3BgMG_root")) fail("CSS lacks hero/reading/composer/tool component coverage");
 else ok("hero, reading, composer, and tool components are covered");
 if (!css.includes("never change the box model") || css.includes(".CY-8Ka_card:has(")) fail("tool accents are not host-box-model safe");
 else ok("tool accents preserve native box models");
-if (!css.includes(".QWLzlG_root,") || !css.includes("var(--f1-panel-2) 94%") || !css.includes(".QWLzlG_summary")) fail("tool rows lack an opaque readable surface");
+if (!css.includes(":is(.lcKema_root, .QWLzlG_root),") || !css.includes("var(--f1-panel-2) 94%") || !css.includes(":is(.lcKema_summary, .QWLzlG_summary)")) fail("tool rows lack an opaque readable surface");
 else ok("tool rows have readable local surfaces and text colors");
-if (!css.includes(".Sxvs8a_root {") || !css.includes("border: 0;") || !css.includes("border-radius: 10px")) fail("assistant surface still uses a hard frame");
+if (!css.includes(":is(.hWmORq_root, .Sxvs8a_root) {") || !css.includes("border: 0;") || !css.includes("border-radius: 10px")) fail("assistant surface still uses a hard frame");
 else ok("assistant surface uses a soft frameless plate");
 if (!css.includes("padding: 18px 20px") || !css.includes("padding: 12px 14px") || !css.includes("padding-inline: 12px 10px")) fail("framed content lacks comfortable spacing");
 else ok("assistant, table, and tool content have comfortable frame spacing");
@@ -161,7 +161,7 @@ if (!css.includes(".VOzbGW_panel") || !css.includes("var(--f1-panel) 98%")) fail
 else ok("settings panel uses an opaque readable surface");
 if (/\.hHd-Xa_root\s*\{[^}]*(?:backdrop-filter|isolation\s*:\s*isolate)/s.test(css) || /\.pI_x6G_sidebarCol\s*\{[^}]*(?:backdrop-filter|isolation\s*:\s*isolate)/s.test(css)) fail("layout ancestor creates a stacking context and may trap fixed overlays");
 else ok("layout ancestors do not create fixed-overlay containing blocks");
-if (!css.includes('.QWLzlG_root[data-state="running"] .QWLzlG_row') || !css.includes('.o3BgMG_root[data-state="running"] .o3BgMG_row') || !css.includes('.CY-8Ka_root[data-state="running"]')) fail("motion control does not cover live tool-state sweep pseudo-elements");
+if (!css.includes(':is(.lcKema_root, .QWLzlG_root)[data-state="running"] :is(.lcKema_row, .QWLzlG_row)') || !css.includes('.o3BgMG_root[data-state="running"] .o3BgMG_row') || !css.includes('.CY-8Ka_root[data-state="running"]')) fail("motion control does not cover live tool-state sweep pseudo-elements");
 else ok("motion-off covers live tool-state animation hooks");
 if (css.includes("TEAM RADIO") || css.includes('content: "LIVE')) fail("CSS contains simulated broadcast telemetry");
 else ok("no simulated LIVE/TEAM RADIO telemetry");
@@ -186,7 +186,7 @@ const dshPackages = process.env.USERPROFILE
 const selectorContracts = [
   ["dsh-client-ui-layout", ["pI_x6G_frame", "pI_x6G_sidebarCol"]],
   ["dsh-client-ui-sidebar", ["hHd-Xa_root"]],
-  ["dsh-client-ui-conversation", ["wSkVaW_root", "pXSMma_headline", "uV2eYG_card", "Sxvs8a_root", "gdEzaW_bubble", "QWLzlG_root"]],
+  ["dsh-client-ui-conversation", ["wSkVaW_root", "pXSMma_headline", "uV2eYG_card"]],
   ["dsh-client-ui-tool", ["o3BgMG_root", "CY-8Ka_root"]]
 ];
 if (dshPackages && selectorContracts.every(([pkg]) => existsSync(join(dshPackages, pkg, "lib", "client.js")))) {
@@ -198,7 +198,19 @@ if (dshPackages && selectorContracts.every(([pkg]) => existsSync(join(dshPackage
       badContracts += 1;
     }
   }
-  if (badContracts === 0) ok("DSH 0.1.1-rc.2 selector contract matches installed bundles");
+  // DSH 0.1.2 moved message rendering from conversation into ui-chat.
+  const chatPath = join(dshPackages, "dsh-client-ui-chat", "lib", "client.js");
+  const chatBundle = readFileSync(existsSync(chatPath) ? chatPath : join(dshPackages, "dsh-client-ui-conversation", "lib", "client.js"), "utf8");
+  const messageSelectors = existsSync(chatPath)
+    ? ["hWmORq_root", "Sixlwa_bubble", "lcKema_root", "lcKema_row", "lcKema_title", "lcKema_summary"]
+    : ["Sxvs8a_root", "gdEzaW_bubble", "QWLzlG_root", "QWLzlG_row", "QWLzlG_title", "QWLzlG_summary"];
+  for (const selector of messageSelectors) {
+    if (!chatBundle.includes(selector) || !css.includes(`.${selector}`)) {
+      fail(`message surface selector missing in host or skin: ${selector}`);
+      badContracts += 1;
+    }
+  }
+  if (badContracts === 0) ok("DSH selector contract matches installed bundles, including message surfaces");
 } else {
   ok("DSH selector contract skipped (host packages not installed)");
 }
