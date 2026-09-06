@@ -1,5 +1,7 @@
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
+import { readFileSync, mkdtempSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { createServer } from "node:http";
 import { once } from "node:events";
 import vm from "node:vm";
@@ -35,7 +37,7 @@ function client() {
   return {
     runtime: sandbox.runtime, styles, attrs, storage,
     dispose: () => dispose(),
-    finish: (payload) => resolveRequest({ ok: true, json: async () => payload })
+    finish: (payload, status = 200) => resolveRequest({ ok: status === 200, status, json: async () => payload })
   };
 }
 
@@ -48,6 +50,66 @@ test("an upload stays assigned to its original team after a team switch", async 
   assert.equal(app.runtime.wallpapers.redbull, "/plugin-assets/dsh-f1-skin-custom/test.jpg");
   assert.equal(app.runtime.wallpapers.ferrari, undefined);
   assert.equal(app.attrs.get("data-f1-team"), "ferrari");
+});
+
+test("missing upload route explains that the host needs restarting", async () => {
+  const app = client();
+  const upload = app.runtime.uploadWallpaper({});
+  app.finish({}, 404);
+  await assert.rejects(upload, /重启 dsh web/);
+});
+
+test("oversized files are rejected before sending an upload", async () => {
+  const app = client();
+  await assert.rejects(app.runtime.uploadWallpaper({ size: 25 * 1024 * 1024 + 1 }), /25 MB/);
+});
+
+test("wallpaper HTTP upload, deduplication, list, download and deletion", async (t) => {
+  const temp = mkdtempSync(join(tmpdir(), "dsh-f1-upload-test-"));
+  const previous = process.env.DSH_HOME;
+  const routes = [];
+  let dispose;
+  try {
+    process.env.DSH_HOME = temp;
+    dispose = mountRoutes({ webServer: { register: (route) => { routes.push(route); return () => {}; } } });
+  } finally {
+    if (previous === undefined) delete process.env.DSH_HOME;
+    else process.env.DSH_HOME = previous;
+  }
+  const server = createServer((req, res) => {
+    Promise.resolve(routes[1].handler(req, res)).catch(() => { res.statusCode = 500; res.end(); });
+  });
+  t.after(async () => {
+    dispose();
+    server.closeAllConnections();
+    await new Promise((resolve) => server.close(resolve));
+    rmSync(temp, { recursive: true, force: true });
+  });
+  server.listen(0, "127.0.0.1");
+  await once(server, "listening");
+  const origin = `http://127.0.0.1:${server.address().port}`;
+  const prefix = `${origin}/plugin-assets/dsh-f1-skin-custom`;
+  const photo = readFileSync(new URL("../../lib/cockpits/ferrari-broadcast.jpg", import.meta.url));
+  const blocked = await fetch(`${prefix}/upload`, { method: "POST", body: photo });
+  assert.equal(blocked.status, 403);
+  await blocked.arrayBuffer();
+  let uploaded;
+  for (const reused of [false, true]) {
+    const response = await fetch(`${prefix}/upload`, { method: "POST", headers: { origin }, body: photo });
+    assert.equal(response.status, 200);
+    uploaded = await response.json();
+    assert.equal(uploaded.reused, reused);
+  }
+  const list = await (await fetch(`${prefix}/list`)).json();
+  assert.equal(list.wallpapers.length, 1);
+  const download = await fetch(origin + uploaded.url);
+  assert.deepEqual(Buffer.from(await download.arrayBuffer()), photo);
+  const deleted = await fetch(`${prefix}/delete`, {
+    method: "POST", headers: { origin, "content-type": "application/json" }, body: JSON.stringify({ url: uploaded.url })
+  });
+  assert.equal(deleted.status, 200);
+  await deleted.arrayBuffer();
+  assert.equal((await (await fetch(`${prefix}/list`)).json()).wallpapers.length, 0);
 });
 
 for (const operation of ["upload", "delete"]) {
