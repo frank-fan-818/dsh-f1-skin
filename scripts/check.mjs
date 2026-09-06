@@ -11,7 +11,10 @@ const STYLE_FILES = [
   "controls.css", "teams.css", "responsive.css"
 ];
 const MAX_BUNDLE_BYTES = 2_800_000;
-const MAX_PHOTO_BYTES = 700_000;
+// Photographs are HTTP-served from lib/cockpits/ (browsers drop data: URIs
+// beyond ~2 MB used as CSS backgrounds), so sources may be full-resolution.
+const MAX_PHOTO_BYTES = 3_000_000;
+const ASSET_URL_PREFIX = "/plugin-assets/dsh-f1-skin";
 let failures = 0;
 const fail = (msg) => { console.error("✗ " + msg); failures += 1; };
 const ok = (msg) => console.log("✓ " + msg);
@@ -94,8 +97,11 @@ for (const team of data.TEAMS) {
   else if (statSync(photoPath).size > MAX_PHOTO_BYTES) fail(`${team.id}: photograph exceeds ${MAX_PHOTO_BYTES} bytes`);
 }
 if (data.TEAMS.every((team) => existsSync(join(root, "assets", "cockpits", `${team.id}-broadcast.jpg`)))) {
-  ok(`all broadcast photographs stay within ${Math.round(MAX_PHOTO_BYTES / 1000)} KB each`);
+  ok(`all broadcast photographs stay within ${Math.round(MAX_PHOTO_BYTES / 1000)} KB each (HTTP-served, not inlined)`);
 }
+const stagedMissing = data.TEAMS.filter((team) => !existsSync(join(root, "lib", "cockpits", `${team.id}-broadcast.jpg`)));
+if (stagedMissing.length > 0) fail(`cockpit photographs not staged under lib/cockpits: ${stagedMissing.map((team) => team.id).join(", ")} — run: node scripts/build.mjs`);
+else ok("cockpit photographs staged under lib/cockpits/ for the host route");
 
 // ── CSS sanity ──
 const missingStyles = STYLE_FILES.filter((file) => !existsSync(join(root, "src", "styles", file)));
@@ -170,6 +176,8 @@ if (!runtime.includes('ctx.slots.inject("settings.section"') || !runtime.include
 else ok("F1 controls use the native settings.section slot and pressed-button semantics");
 if (runtime.includes("team.slot") || runtime.includes("team.code") || runtime.includes("current.code")) fail("team numbers or abbreviations are still rendered in settings");
 else ok("settings render full team names without numeric slots or abbreviations");
+if (!runtime.includes("dsh-f1-skin:wallpapers") || !runtime.includes("/plugin-assets/dsh-f1-skin-custom/upload")) fail("runtime lacks per-team custom wallpaper plumbing");
+else ok("per-team custom wallpaper plumbing present");
 
 // Version-tied CSS Module selectors are checked when this machine has DSH installed.
 const dshPackages = process.env.USERPROFILE
@@ -227,11 +235,12 @@ if (!existsSync(bundlePath)) {
   else ok("bundle registers via window.__ModuleLoader__.load");
   if (!bundle.includes('id: "dsh-f1-skin"')) fail("bundle id is not dsh-f1-skin");
   else ok("bundle id correct");
-  const images = (bundle.match(/data:image\/[a-z+]+;base64,/g) || []).length;
-  if (images !== 8) fail(`expected exactly 8 embedded image assets, found ${images}`);
-  else ok(`${images} embedded image assets (4 photos + 4 logos)`);
-  if (bundle.includes("cockpit\": null")) fail("a cockpit image was not embedded");
-  else ok("no unembedded cockpit placeholders");
+  const inlinedPhotos = (bundle.match(/data:image\/jpeg;base64,/g) || []).length;
+  if (inlinedPhotos !== 0) fail(`cockpit photographs must be HTTP-served, not inlined (found ${inlinedPhotos})`);
+  else ok("no inlined cockpit photographs (served via /plugin-assets/dsh-f1-skin)");
+  const missingCockpitRefs = data.TEAMS.filter((team) => !bundle.includes(`"cockpit":"${ASSET_URL_PREFIX}/${team.id}-broadcast.jpg"`));
+  if (missingCockpitRefs.length > 0) fail(`cockpit URLs missing in bundle: ${missingCockpitRefs.map((team) => team.id).join(", ")}`);
+  else ok("every team references its HTTP-served cockpit photograph");
   const logos = (bundle.match(/data:image\/svg\+xml;base64,/g) || []).length;
   if (logos !== 4) fail(`expected 4 embedded team logos, found ${logos}`);
   else ok("4 official team logos embedded");

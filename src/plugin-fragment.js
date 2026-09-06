@@ -8,7 +8,8 @@
       photo: "dsh-f1-skin:photo",
       surface: "dsh-f1-skin:surface",
       blur: "dsh-f1-skin:blur",
-      motion: "dsh-f1-skin:motion"
+      motion: "dsh-f1-skin:motion",
+      wallpapers: "dsh-f1-skin:wallpapers"
     };
     const DEFAULTS = { photo: 100, surface: 84, blur: 10, motion: true };
     let applySerial = 0;
@@ -24,6 +25,20 @@
 
     function writeStore(key, value) {
       try { localStorage.setItem(key, String(value)); } catch { /* private mode */ }
+    }
+
+    // Per-team custom wallpapers: { [teamId]: "/plugin-assets/dsh-f1-skin-custom/….jpg" }.
+    function readWallpaperMap() {
+      try {
+        const raw = localStorage.getItem(STORE.wallpapers);
+        if (!raw) return {};
+        const parsed = JSON.parse(raw);
+        return parsed && typeof parsed === "object" ? parsed : {};
+      } catch { return {}; }
+    }
+
+    function writeWallpaperMap(map) {
+      try { localStorage.setItem(STORE.wallpapers, JSON.stringify(map)); } catch { /* private mode */ }
     }
 
     function readBoundedNumber(key, fallback, min, max) {
@@ -78,7 +93,8 @@
       root.style.setProperty("--f1-on-accent-dark", team.onBrandDark);
       root.style.setProperty("--f1-on-accent-light", team.onBrandLight);
       root.style.setProperty("--f1-tint", team.tint);
-      root.style.setProperty("--f1-cockpit", `url("${team.cockpit}")`);
+      const customUrl = runtime.wallpapers[team.id];
+      root.style.setProperty("--f1-cockpit", `url("${customUrl || team.cockpit}")`);
       root.style.setProperty("--f1-team-logo", `url("${team.logo}")`);
       root.style.setProperty("--f1-cockpit-position", team.position || "center");
       root.style.setProperty("--f1-cockpit-mobile-position", team.mobilePosition || team.position || "center");
@@ -115,6 +131,19 @@
       return function F1SettingsSection() {
         const [snapshot, setSnapshot] = React.useState(() => runtime.snapshot());
         React.useEffect(() => runtime.subscribe(setSnapshot), []);
+        const [wallpaperState, setWallpaperState] = React.useState({ busy: false, msg: "" });
+        const [library, setLibrary] = React.useState({ loading: false, items: [] });
+
+        const reloadLibrary = () => {
+          fetch("/plugin-assets/dsh-f1-skin-custom/list")
+            .then((res) => (res.ok ? res.json() : Promise.reject(new Error(String(res.status)))))
+            .then((payload) => setLibrary({
+              loading: false,
+              items: payload && Array.isArray(payload.wallpapers) ? payload.wallpapers : []
+            }))
+            .catch(() => setLibrary({ loading: false, items: [] }));
+        };
+        React.useEffect(() => { reloadLibrary(); }, []);
 
         const teamCards = TEAMS.map((team) => h("button", {
           type: "button",
@@ -131,7 +160,7 @@
         h("span", {
           className: "dsh-f1-team-card__image",
           "aria-hidden": "true",
-          style: { backgroundImage: `url("${team.cockpit}")` }
+          style: { backgroundImage: `url("${(snapshot.wallpapers || {})[team.id] || team.cockpit}")` }
         }),
         h("span", { className: "dsh-f1-team-card__body" },
           h("strong", { className: "dsh-f1-team-card__name" }, team.name),
@@ -158,6 +187,27 @@
         h("output", null, `${snapshot[key]}${suffix}`));
 
         const current = findTeam(snapshot.teamId);
+
+        const onPickWallpaper = (event) => {
+          const input = event.target;
+          const file = input.files && input.files[0];
+          input.value = "";
+          if (!file) return;
+          setWallpaperState({ busy: true, msg: "上传中…" });
+          runtime.uploadWallpaper(file)
+            .then(() => { reloadLibrary(); setWallpaperState({ busy: false, msg: "" }); })
+            .catch(() => setWallpaperState({ busy: false, msg: "上传失败，请重试" }));
+        };
+        const applyLibraryWallpaper = (url) => {
+          runtime.applyWallpaperUrl(url);
+          setWallpaperState({ busy: false, msg: "" });
+        };
+        const removeLibraryWallpaper = (url) => {
+          setWallpaperState({ busy: true, msg: "删除中…" });
+          runtime.deleteWallpaper(url)
+            .then(() => { reloadLibrary(); setWallpaperState({ busy: false, msg: "" }); })
+            .catch(() => setWallpaperState({ busy: false, msg: "删除失败，请重试" }));
+        };
         return h("section", { className: "dsh-f1-settings", "aria-label": "Formula One 车队皮肤" },
           h("header", { className: "dsh-f1-settings__header" },
             h("div", null,
@@ -183,6 +233,54 @@
                 onChange: (event) => runtime.setPreference("motion", event.target.checked)
               }),
               h("output", null, snapshot.motion ? "ON" : "OFF"))
+          ),
+          h("section", { className: "dsh-f1-settings__panel", "aria-label": "自定义背景" },
+            h("h3", { className: "dsh-f1-settings__panel-title" }, "自定义背景"),
+            h("p", { className: "dsh-f1-settings__panel-hint" },
+              `为当前车队「${current.name}」单独选择背景图（任意分辨率，JPEG/PNG/WebP，≤25MB）。相同图片只存一份，可复用于多个车队。`),
+            h("label", { className: "dsh-f1-setting" },
+              h("span", { className: "dsh-f1-setting__label" }, "背景图片"),
+              h("input", {
+                type: "file",
+                accept: "image/jpeg,image/png,image/webp",
+                disabled: wallpaperState.busy,
+                onChange: onPickWallpaper
+              }),
+              h("output", null, snapshot.customUrl ? "自定义" : "车队默认")),
+            library.items.length > 0
+              ? h("div", { className: "dsh-f1-settings__library" },
+                  h("p", { className: "dsh-f1-settings__library-title" },
+                    `已上传（${library.items.length}）：点“应用”给「${current.name}」；删除会同时清掉所有车队对它的引用`),
+                  h("div", { className: "dsh-f1-settings__library-grid" },
+                    library.items.map((item) =>
+                      h("div", {
+                        key: item.url,
+                        className: "dsh-f1-settings__wallpaper-tile" + (snapshot.customUrl === item.url ? " is-active" : ""),
+                        title: item.id
+                      },
+                        h("img", { src: item.url, alt: "", loading: "lazy" }),
+                        h("div", { className: "dsh-f1-settings__tile-meta" },
+                          `${Math.max(1, Math.round(item.size / 1024))} KB`),
+                        h("div", { className: "dsh-f1-settings__tile-actions" },
+                          h("button", { type: "button", disabled: wallpaperState.busy,
+                            onClick: () => applyLibraryWallpaper(item.url) }, "应用"),
+                          h("button", { type: "button", className: "is-danger", disabled: wallpaperState.busy,
+                            onClick: () => removeLibraryWallpaper(item.url) }, "删除"))))))
+              : h("p", { className: "dsh-f1-settings__library-empty" },
+                  "尚未上传自定义壁纸。"),
+            h("div", { className: "dsh-f1-settings__wallpaper-actions" },
+              h("button", {
+                type: "button",
+                className: "dsh-f1-settings__reset",
+                disabled: !snapshot.customUrl,
+                onClick: () => {
+                  runtime.clearWallpaper();
+                  setWallpaperState({ busy: false, msg: "" });
+                }
+              }, "恢复该车队默认"),
+              wallpaperState.msg
+                ? h("span", { className: "dsh-f1-settings__msg" }, wallpaperState.msg)
+                : null)
           )
         );
       };
@@ -201,8 +299,13 @@
         tokenDisposer: null,
         lastTeamId: null,
         prefs: readPreferences(),
+        wallpapers: readWallpaperMap(),
+        currentTeamId() {
+          return this.lastTeamId || TEAMS[0].id;
+        },
         snapshot() {
-          return { teamId: this.lastTeamId || TEAMS[0].id, ...this.prefs };
+          const teamId = this.currentTeamId();
+          return { teamId, ...this.prefs, wallpapers: this.wallpapers, customUrl: this.wallpapers[teamId] || "" };
         },
         emit() {
           const next = this.snapshot();
@@ -215,6 +318,53 @@
         },
         selectTeam(id) {
           applyTeam(this, theme, findTeam(id));
+        },
+        applyWallpaperUrl(url) {
+          if (typeof url !== "string" || url === "") return;
+          const teamId = this.currentTeamId();
+          if (this.wallpapers[teamId] === url) return;
+          this.wallpapers = { ...this.wallpapers, [teamId]: url };
+          writeWallpaperMap(this.wallpapers);
+          applyTeam(this, theme, findTeam(teamId));
+        },
+        async uploadWallpaper(file) {
+          if (!file) throw new Error("no file selected");
+          const res = await fetch("/plugin-assets/dsh-f1-skin-custom/upload", { method: "POST", body: file });
+          if (!res.ok) throw new Error(`upload failed (${res.status})`);
+          const payload = await res.json().catch(() => null);
+          const url = payload && typeof payload.url === "string" ? payload.url : null;
+          if (!url) throw new Error("upload response missing url");
+          this.applyWallpaperUrl(url);
+          return url;
+        },
+        async deleteWallpaper(url) {
+          const res = await fetch("/plugin-assets/dsh-f1-skin-custom/delete", {
+            method: "POST",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify({ url })
+          });
+          if (!res.ok) throw new Error(`delete failed (${res.status})`);
+          let changed = false;
+          const next = {};
+          for (const key of Object.keys(this.wallpapers)) {
+            if (this.wallpapers[key] === url) { changed = true; continue; }
+            next[key] = this.wallpapers[key];
+          }
+          if (changed) {
+            this.wallpapers = next;
+            writeWallpaperMap(next);
+            applyTeam(this, theme, findTeam(this.currentTeamId()));
+          }
+          return true;
+        },
+        clearWallpaper() {
+          const teamId = this.currentTeamId();
+          if (!Object.prototype.hasOwnProperty.call(this.wallpapers, teamId)) return;
+          const next = { ...this.wallpapers };
+          delete next[teamId];
+          this.wallpapers = next;
+          writeWallpaperMap(next);
+          applyTeam(this, theme, findTeam(teamId));
         },
         setPreference(key, value) {
           if (!(key in this.prefs)) return;

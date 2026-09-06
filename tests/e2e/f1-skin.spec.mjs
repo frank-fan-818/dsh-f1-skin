@@ -56,7 +56,8 @@ for (const [id, name] of teams) {
 
     const backgroundImage = await page.locator("html").evaluate((root) =>
       getComputedStyle(root).getPropertyValue("--f1-cockpit"));
-    expect(backgroundImage).toContain("data:image/jpeg;base64");
+    // Cockpit photographs are HTTP-served (no inlining cap) instead of data: URIs.
+    expect(backgroundImage).toContain("/plugin-assets/dsh-f1-skin/");
 
     const bodyText = await page.locator("body").innerText();
     expect(bodyText).not.toMatch(/\b(?:RBR|MCL|MER|FER)\s*0[1-4]\b|\bGARAGE\s*0[1-4]\b/i);

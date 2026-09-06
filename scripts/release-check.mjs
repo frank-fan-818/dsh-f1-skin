@@ -8,8 +8,10 @@ import { fileURLToPath } from "node:url";
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
 const temp = mkdtempSync(join(tmpdir(), "dsh-f1-release-"));
 const npmExecPath = process.env.npm_execpath;
-const MAX_PACKED_BYTES = 2_100_000;
-const MAX_UNPACKED_BYTES = 2_850_000;
+// Cockpit photographs are staged into lib/ by the build (HTTP-served), so the
+// tarball budget covers the full-resolution photos.
+const MAX_PACKED_BYTES = 4_600_000;
+const MAX_UNPACKED_BYTES = 5_200_000;
 const required = new Set([
   "LICENSE",
   "README.md",

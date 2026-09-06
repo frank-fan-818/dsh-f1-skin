@@ -1,12 +1,17 @@
 // build.mjs — assemble lib/client.js (the web2 lazy-CJS bundle) from
-// src/teams.mjs data, the plugin fragment, and the embedded cockpit images.
+// src/teams.mjs data, the plugin fragment, and the embedded team logos;
+// cockpit photographs are staged into lib/cockpits/ and referenced by HTTP
+// URL so the host half can serve them at full resolution (no inlining cap).
 // Zero dependencies: node scripts/build.mjs
-import { readFileSync, writeFileSync, mkdirSync } from "node:fs";
+import { copyFileSync, existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import * as data from "../src/teams.mjs";
 
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
+
+// Host route prefix that lib/routes.js registers — keep the two in sync.
+const ASSET_URL_PREFIX = "/plugin-assets/dsh-f1-skin";
 
 const STYLE_FILES = [
   "foundation.css",
@@ -20,22 +25,24 @@ const STYLE_FILES = [
 ];
 
 const COCKPIT_EXTS = [".jpg", ".jpeg", ".png", ".webp", ".svg"];
-const MIME = {
-  ".jpg": "image/jpeg",
-  ".jpeg": "image/jpeg",
-  ".png": "image/png",
-  ".webp": "image/webp",
-  ".svg": "image/svg+xml"
-};
 
-function loadCockpit(id) {
+/** Copy one cockpit photograph into lib/cockpits/ and return its served URL. */
+function stageCockpit(id) {
+  let fileName = null;
   for (const ext of COCKPIT_EXTS) {
-    try {
-      const buf = readFileSync(join(root, "assets", "cockpits", `${id}-broadcast${ext}`));
-      return `data:${MIME[ext]};base64,${buf.toString("base64")}`;
-    } catch { /* try the next extension */ }
+    const candidate = `${id}-broadcast${ext}`;
+    if (existsSync(join(root, "assets", "cockpits", candidate))) {
+      fileName = candidate;
+      break;
+    }
   }
-  throw new Error(`dsh-f1-skin build: no broadcast asset for team "${id}"`);
+  if (fileName === null) throw new Error(`dsh-f1-skin build: no broadcast asset for team "${id}"`);
+  mkdirSync(join(root, "lib", "cockpits"), { recursive: true });
+  copyFileSync(
+    join(root, "assets", "cockpits", fileName),
+    join(root, "lib", "cockpits", fileName)
+  );
+  return `${ASSET_URL_PREFIX}/${fileName}`;
 }
 
 function loadTeamLogo(id) {
@@ -46,7 +53,7 @@ function loadTeamLogo(id) {
 
 const teams = data.TEAMS.map((team) => ({
   ...team,
-  cockpit: loadCockpit(team.id),
+  cockpit: stageCockpit(team.id),
   logo: loadTeamLogo(team.id)
 }));
 
@@ -86,4 +93,4 @@ ${fragment}
 const out = join(root, "lib", "client.js");
 mkdirSync(join(root, "lib"), { recursive: true });
 writeFileSync(out, bundle, "utf8");
-console.log(`built lib/client.js (${Math.round(bundle.length / 1024)} KB, ${teams.length} teams embedded)`);
+console.log(`built lib/client.js (${Math.round(bundle.length / 1024)} KB, ${teams.length} teams, cockpit photos staged under lib/cockpits/)`);

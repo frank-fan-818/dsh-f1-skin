@@ -28,7 +28,7 @@
 
 | Oracle Red Bull Racing | Scuderia Ferrari |
 |---|---|
-| ![Oracle Red Bull Racing 主题](https://raw.githubusercontent.com/frank-fan-818/dsh-f1-skin/master/docs/screenshots/redbull-desktop.png) | ![Scuderia Ferrari 主题](https://raw.githubusercontent.com/frank-fan-818/dsh-f1-skin/master/docs/screenshots/ferrari-desktop.png) |
+| ![Oracle Red Bull Racing 主题](docs/screenshots/redbull-desktop.png) | ![Scuderia Ferrari 主题](https://raw.githubusercontent.com/frank-fan-818/dsh-f1-skin/master/docs/screenshots/ferrari-desktop.png) |
 
 | McLaren Racing | Mercedes-AMG Petronas Formula One Team |
 |---|---|
@@ -54,7 +54,9 @@
 - **组件语言**：输入框、消息、推理、工具调用、代码块、菜单和弹层共用精密边线、数据字体和局部状态条。
 - **真实状态**：直接使用 DSH 的 `data-state` 表现运行、完成和错误，不显示虚假的 `LIVE` 或 `TEAM RADIO`。
 - **原生 F1 设置页**：通过 DSH 官方 `settings.section` slot 切换车队，并调整照片强度、文字衬底、模糊和动效；不会悬浮遮挡对话或宿主功能。
-- **记忆**：车队和视觉参数保存在本机 `localStorage`，刷新后保持。
+- **HTTP 照片层**：赛车摄影由宿主路由（`/plugin-assets/dsh-f1-skin/*`）以静态文件下发，不再内联进 JS——没有约 2MB 的 data-URI 限制，因此支持 4K 及以上分辨率；红牛背景当前为 4K 摄影原图。
+- **自定义壁纸（按车队）**：设置页可为每个车队单独上传 JPEG/PNG/WebP（≤25MB）背景；相同图片只存一份（按内容哈希去重）；已上传壁纸库支持随时「应用 / 删除」，删除会同步清掉所有车队对它的引用。选择存于 `localStorage`，图片文件存于 `$DSH_HOME/dsh-f1-skin/custom/`。想替换内置背景图，覆盖 `assets/cockpits/<队名>-broadcast.jpg` 后运行 `npm run build` 即可。
+- **记忆**：车队、视觉参数与自定义壁纸选择保存在本机 `localStorage`，刷新后保持。
 
 ## 安装
 
@@ -88,7 +90,7 @@ dsh plugin --profile web add dsh-f1-skin
 dsh plugin --profile web add github:frank-fan-818/dsh-f1-skin
 ```
 
-> 仓库已提交构建产物 `lib/client.js`，无需安装步骤里的 build 脚本。
+> 仓库已提交构建产物（`lib/client.js` 与 `lib/cockpits/` 照片），无需安装步骤里的 build 脚本；请确保两者随仓库 / npm 包一起发布。
 
 ### 方式三：下载源码 / ZIP 后本地链接
 
@@ -101,7 +103,7 @@ dsh plugin --profile web add link:.
 #   node D:\path\to\dsh-f1-skin\scripts\reconcile-profile.mjs
 ```
 
-安装后**重启 `dsh web`**，打开 http://127.0.0.1:3080；前往「设置 → Formula One 车队」切换车队和调节视觉强度。
+安装后**重启 `dsh web`**，打开 http://127.0.0.1:3080；前往「设置 → Formula One 车队」切换车队、调节视觉强度，并为各车队上传 / 管理自定义壁纸。宿主照片与壁纸路由在重启后挂载，**重启前自定义壁纸的上传 / 列表 / 删除接口不可用**。
 
 ### 更新
 
