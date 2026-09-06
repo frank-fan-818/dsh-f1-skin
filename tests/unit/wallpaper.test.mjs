@@ -53,10 +53,12 @@ test("an upload stays assigned to its original team after a team switch", async 
 });
 
 test("missing upload route explains that the host needs restarting", async () => {
+  for (const status of [404, 405]) {
   const app = client();
   const upload = app.runtime.uploadWallpaper({});
-  app.finish({}, 404);
+  app.finish({}, status);
   await assert.rejects(upload, /重启 dsh web/);
+  }
 });
 
 test("oversized files are rejected before sending an upload", async () => {
