@@ -3,7 +3,7 @@
 All notable changes to this project are documented here. Versions follow
 [Semantic Versioning](https://semver.org/).
 
-## [Unreleased]
+## [0.4.0] - 2026-09-17
 
 ### Added
 
@@ -35,6 +35,15 @@ All notable changes to this project are documented here. Versions follow
   the whale over the panel border and the team accent bar. The brand and its
   identity now keep the host's flex behaviour, and only the wordmark is pinned.
 
+### Compatibility
+
+- Verified against DeepSeek Harness Web `0.1.1-rc.2`, the version the CI browser
+  suite installs. The master switch uses only plugin-owned elements plus the
+  host's `theme.overrideTokens` service, so it is independent of the host's
+  CSS-module class names; the browser suite skips its brand-row check on host
+  builds that do not expose the slotted mark element.
+- Requires Node.js 20 or newer for development and packaging.
+
 ## [0.3.0] - 2026-09-01
 
 ### Added
@@ -62,5 +71,6 @@ All notable changes to this project are documented here. Versions follow
 - Verified against DeepSeek Harness Web `0.1.1-rc.2`.
 - Requires Node.js 20 or newer for development and packaging.
 
-[Unreleased]: https://github.com/frank-fan-818/dsh-f1-skin/compare/v0.3.0...HEAD
+[Unreleased]: https://github.com/frank-fan-818/dsh-f1-skin/compare/v0.4.0...HEAD
+[0.4.0]: https://github.com/frank-fan-818/dsh-f1-skin/compare/v0.3.0...v0.4.0
 [0.3.0]: https://github.com/frank-fan-818/dsh-f1-skin/compare/v0.2.0...v0.3.0
