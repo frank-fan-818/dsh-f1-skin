@@ -6,23 +6,6 @@
   :is(.hWmORq_root, .Sxvs8a_root) table td { padding: 10px 11px; }
   :is(.hWmORq_root, .Sxvs8a_root) table th:first-child,
   :is(.hWmORq_root, .Sxvs8a_root) table td:first-child { padding-left: 11px; }
-  .dsh-f1-settings__grid { grid-template-columns: 1fr; }
-  .dsh-f1-settings__header { flex-direction: column; }
-  .dsh-f1-settings__status { align-self: flex-start; }
-  .dsh-f1-setting {
-    grid-template-columns: minmax(92px, 1fr) minmax(110px, 1.5fr) 42px;
-    gap: 9px;
-  }
-}
-
-@media (max-width: 480px) {
-  .dsh-f1-settings__panel { padding: 12px; }
-  .dsh-f1-setting {
-    grid-template-columns: 1fr 44px;
-    padding-block: 8px;
-  }
-  .dsh-f1-setting input { grid-column: 1 / -1; grid-row: 2; }
-  .dsh-f1-setting output { grid-column: 2; grid-row: 1; }
 }
 
 @media (prefers-reduced-motion: reduce) {

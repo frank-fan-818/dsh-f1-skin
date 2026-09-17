@@ -4,6 +4,7 @@
     const h = React.createElement;
     const SOURCE = "dsh-f1-skin";
     const STORE = {
+      enabled: "dsh-f1-skin:enabled",
       team: "dsh-f1-skin:team",
       photo: "dsh-f1-skin:photo",
       surface: "dsh-f1-skin:surface",
@@ -39,6 +40,13 @@
 
     function writeWallpaperMap(map) {
       try { localStorage.setItem(STORE.wallpapers, JSON.stringify(map)); } catch { /* private mode */ }
+    }
+
+    // The master switch owns exactly one stored bit. Only the explicit "off"
+    // withdraws the skin, so a profile that never touched the switch — and any
+    // unreadable storage — keeps the skin on.
+    function readEnabled() {
+      return readStore(STORE.enabled) !== "off";
     }
 
     function wallpaperError(status) {
@@ -87,13 +95,38 @@
       }, "dsh-f1-skin: dark-mode sync");
     }
 
-    function applyTeam(runtime, theme, team) {
-      if (runtime.lastTeamId !== team.id || runtime.tokenDisposer === null) {
-        const nextDisposer = theme.overrideTokens(runtime.source, makeTeamTokens(team));
-        runtime.tokenDisposer = nextDisposer;
-        runtime.lastTeamId = team.id;
+    // The token layer is the one host-facing effect that survives a team switch,
+    // so it is owned apart from the armed team: switching the skin off withdraws
+    // exactly this layer, and switching it back on restacks it for the armed
+    // team. Owning both through one field would let a team switch while off
+    // silently restack the layer the user just withdrew.
+    function syncTokenLayer(runtime, theme, team) {
+      if (!runtime.enabled) {
+        if (runtime.tokenDisposer !== null) runtime.tokenDisposer();
+        runtime.tokenDisposer = null;
+        runtime.tokenTeamId = null;
+        return;
       }
+      if (runtime.tokenTeamId === team.id && runtime.tokenDisposer !== null) return;
+      runtime.tokenDisposer = theme.overrideTokens(runtime.source, makeTeamTokens(team));
+      runtime.tokenTeamId = team.id;
+    }
+
+    // The skin stylesheet is attached only while the skin is on, so "off" means
+    // the document holds no rule that can paint a host element — not that a rule
+    // somewhere is being overruled.
+    function syncSkinSheet(runtime) {
+      if (runtime.skinSheet === null || runtime.skinAttached === runtime.enabled) return;
+      runtime.skinAttached = runtime.enabled;
+      if (runtime.enabled) document.head.appendChild(runtime.skinSheet);
+      else runtime.skinSheet.remove();
+    }
+
+    function applyTeam(runtime, theme, team) {
+      syncTokenLayer(runtime, theme, team);
+      syncSkinSheet(runtime);
       const root = document.documentElement;
+      root.setAttribute("data-f1-enabled", runtime.enabled ? "true" : "false");
       root.style.setProperty("--f1-accent-dark", team.dark.brand);
       root.style.setProperty("--f1-accent-light", team.light.brand);
       root.style.setProperty("--f1-accent-text-dark", team.dark.brandText);
@@ -120,20 +153,38 @@
       root.setAttribute("data-f1-team", team.id);
       root.setAttribute("data-f1-personality", team.personality);
       root.setAttribute("data-f1-instance", runtime.id);
+      runtime.lastTeamId = team.id;
       writeStore(STORE.team, team.id);
       runtime.emit();
     }
 
     function installCss(ctx, runtime) {
       ctx.effect(() => {
-        const tag = document.createElement("style");
-        tag.dataset.plugin = "dsh-f1-skin";
-        tag.dataset.pluginCss = "dsh-f1-skin/native-settings.css";
-        tag.dataset.f1Instance = runtime.id;
-        tag.textContent = F1_CSS;
-        document.head.appendChild(tag);
-        return () => tag.remove();
-      }, "dsh-f1-skin: stylesheet");
+        // Two stylesheets with two lifetimes. The settings sheet never leaves the
+        // document (its own page must stay styled and reachable while the skin is
+        // off), and the skin sheet is detached the moment the switch goes off.
+        const panelTag = document.createElement("style");
+        panelTag.dataset.plugin = "dsh-f1-skin";
+        panelTag.dataset.pluginCss = "dsh-f1-skin/settings.css";
+        panelTag.dataset.f1Instance = runtime.id;
+        panelTag.textContent = F1_PANEL_CSS;
+        document.head.appendChild(panelTag);
+
+        const skinTag = document.createElement("style");
+        skinTag.dataset.plugin = "dsh-f1-skin";
+        skinTag.dataset.pluginCss = "dsh-f1-skin/skin.css";
+        skinTag.dataset.f1Instance = runtime.id;
+        skinTag.textContent = F1_SKIN_CSS;
+        runtime.skinSheet = skinTag;
+        syncSkinSheet(runtime);
+
+        return () => {
+          panelTag.remove();
+          skinTag.remove();
+          runtime.skinSheet = null;
+          runtime.skinAttached = false;
+        };
+      }, "dsh-f1-skin: stylesheets");
     }
 
     function createSettingsSection(runtime) {
@@ -154,11 +205,16 @@
         };
         React.useEffect(() => { reloadLibrary(); }, []);
 
+        // While the skin is off the armed team stays armed but nothing paints,
+        // so every skin-only control is disabled rather than left looking live.
+        const off = !snapshot.enabled;
+
         const teamCards = TEAMS.map((team) => h("button", {
           type: "button",
           key: team.id,
           className: "dsh-f1-team-card",
           "aria-pressed": snapshot.teamId === team.id,
+          disabled: off,
           onClick: () => runtime.selectTeam(team.id),
           style: {
             "--team-color-dark": team.dark.brandText,
@@ -191,11 +247,36 @@
           max,
           step: 1,
           value: snapshot[key],
+          disabled: off,
           onChange: (event) => runtime.setPreference(key, Number(event.target.value))
         }),
         h("output", null, `${snapshot[key]}${suffix}`));
 
         const current = findTeam(snapshot.teamId);
+
+        // The master switch stays operable in both states — it is the only way
+        // back, so it can never be disabled alongside the controls it governs.
+        const masterSwitch = h("section", {
+          className: "dsh-f1-master",
+          "aria-label": "皮肤总开关",
+          "data-f1-enabled": snapshot.enabled ? "true" : "false"
+        },
+        h("div", { className: "dsh-f1-master__copy" },
+          h("span", { className: "dsh-f1-master__eyebrow" }, "MASTER SWITCH"),
+          h("strong", { className: "dsh-f1-master__title" }, "皮肤总开关"),
+          h("p", { className: "dsh-f1-master__hint" },
+            "关闭后立即撤下车队配色、赛车背景与赛道装饰，恢复 DSH 原生外观；本设置页始终保留，可随时重新开启。")),
+        h("label", { className: "dsh-f1-switch" },
+          h("input", {
+            type: "checkbox",
+            role: "switch",
+            "aria-label": "启用 F1 车队皮肤",
+            checked: snapshot.enabled,
+            onChange: (event) => runtime.setEnabled(event.target.checked)
+          }),
+          h("span", { className: "dsh-f1-switch__track", "aria-hidden": "true" },
+            h("span", { className: "dsh-f1-switch__thumb" })),
+          h("span", { className: "dsh-f1-switch__state" }, snapshot.enabled ? "已启用" : "已关闭")));
 
         const onPickWallpaper = (event) => {
           const input = event.target;
@@ -217,15 +298,21 @@
             .then(() => { reloadLibrary(); setWallpaperState({ busy: false, msg: "" }); })
             .catch((error) => setWallpaperState({ busy: false, msg: error.message || "删除失败，请重试" }));
         };
-        return h("section", { className: "dsh-f1-settings", "aria-label": "Formula One 车队皮肤" },
+        return h("section", {
+          className: "dsh-f1-settings",
+          "aria-label": "Formula One 车队皮肤",
+          "data-f1-enabled": snapshot.enabled ? "true" : "false"
+        },
           h("header", { className: "dsh-f1-settings__header" },
             h("div", null,
               h("div", { className: "dsh-f1-settings__eyebrow" }, "RACE CONTROL / TEAM GARAGE"),
               h("h2", { className: "dsh-f1-settings__title" }, "Formula One 车队皮肤"),
               h("p", { className: "dsh-f1-settings__description" },
                 "选择车队并调节背景表现。设置页沿用 DSH 原生布局，皮肤不会改变宿主控件尺寸。")),
-            h("div", { className: "dsh-f1-settings__status" }, current.name)
+            h("div", { className: "dsh-f1-settings__status" },
+              `${current.name} · ${snapshot.enabled ? "已启用" : "已关闭"}`)
           ),
+          masterSwitch,
           h("div", { className: "dsh-f1-settings__grid" }, teamCards),
           h("section", { className: "dsh-f1-settings__panel", "aria-label": "视觉强度" },
             h("h3", { className: "dsh-f1-settings__panel-title" }, "视觉强度"),
@@ -239,6 +326,7 @@
               h("input", {
                 type: "checkbox",
                 checked: snapshot.motion,
+                disabled: off,
                 onChange: (event) => runtime.setPreference("motion", event.target.checked)
               }),
               h("output", null, snapshot.motion ? "ON" : "OFF"))
@@ -252,7 +340,7 @@
               h("input", {
                 type: "file",
                 accept: "image/jpeg,image/png,image/webp",
-                disabled: wallpaperState.busy,
+                disabled: wallpaperState.busy || off,
                 onChange: onPickWallpaper
               }),
               h("output", null, snapshot.customUrl ? "自定义" : "车队默认")),
@@ -271,9 +359,9 @@
                         h("div", { className: "dsh-f1-settings__tile-meta" },
                           `${Math.max(1, Math.round(item.size / 1024))} KB`),
                         h("div", { className: "dsh-f1-settings__tile-actions" },
-                          h("button", { type: "button", disabled: wallpaperState.busy,
+                          h("button", { type: "button", disabled: wallpaperState.busy || off,
                             onClick: () => applyLibraryWallpaper(item.url) }, "应用"),
-                          h("button", { type: "button", className: "is-danger", disabled: wallpaperState.busy,
+                          h("button", { type: "button", className: "is-danger", disabled: wallpaperState.busy || off,
                             onClick: () => removeLibraryWallpaper(item.url) }, "删除"))))))
               : h("p", { className: "dsh-f1-settings__library-empty" },
                   library.error || (library.loading ? "正在加载壁纸…" : "尚未上传自定义壁纸。")),
@@ -281,7 +369,7 @@
               h("button", {
                 type: "button",
                 className: "dsh-f1-settings__reset",
-                disabled: !snapshot.customUrl,
+                disabled: !snapshot.customUrl || off,
                 onClick: () => {
                   runtime.clearWallpaper();
                   setWallpaperState({ busy: false, msg: "" });
@@ -306,7 +394,11 @@
         disposed: false,
         id: instanceId,
         source: SOURCE,
+        enabled: readEnabled(),
         tokenDisposer: null,
+        tokenTeamId: null,
+        skinSheet: null,
+        skinAttached: false,
         lastTeamId: null,
         prefs: readPreferences(),
         wallpapers: readWallpaperMap(),
@@ -315,7 +407,13 @@
         },
         snapshot() {
           const teamId = this.currentTeamId();
-          return { teamId, ...this.prefs, wallpapers: this.wallpapers, customUrl: this.wallpapers[teamId] || "" };
+          return {
+            enabled: this.enabled,
+            teamId,
+            ...this.prefs,
+            wallpapers: this.wallpapers,
+            customUrl: this.wallpapers[teamId] || ""
+          };
         },
         emit() {
           const next = this.snapshot();
@@ -325,6 +423,15 @@
           listeners.add(listener);
           listener(this.snapshot());
           return () => listeners.delete(listener);
+        },
+        setEnabled(value) {
+          const next = value !== false;
+          if (next === this.enabled) return;
+          this.enabled = next;
+          writeStore(STORE.enabled, next ? "on" : "off");
+          // Re-applying the armed team is what withdraws or restacks every
+          // host-facing effect; the panel follows through emit().
+          applyTeam(this, theme, findTeam(this.currentTeamId()));
         },
         selectTeam(id) {
           applyTeam(this, theme, findTeam(id));
@@ -406,6 +513,7 @@
         listeners.clear();
         if (runtime.tokenDisposer) runtime.tokenDisposer();
         runtime.tokenDisposer = null;
+        runtime.tokenTeamId = null;
         const root = document.documentElement;
         if (root.getAttribute("data-f1-instance") !== runtime.id) return;
         for (const name of [
@@ -417,7 +525,7 @@
           "--f1-danger-light", "--f1-photo-strength", "--f1-surface-strength", "--f1-blur"
         ]) root.style.removeProperty(name);
         for (const name of [
-          "data-f1-team", "data-f1-personality", "data-f1-dark",
+          "data-f1-enabled", "data-f1-team", "data-f1-personality", "data-f1-dark",
           "data-f1-motion", "data-f1-instance"
         ]) root.removeAttribute(name);
       });

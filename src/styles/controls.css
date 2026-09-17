@@ -230,3 +230,140 @@ html[data-f1-dark="false"] .dsh-f1-team-card { --team-color: var(--team-color-li
   color: var(--f1-danger, #dc2626);
 }
 .dsh-f1-settings__tile-actions button:disabled { opacity: .45; cursor: default; }
+
+/* ── Master switch ───────────────────────────────────────────────────────────
+   The one control that stays operable while the skin is off: without it the
+   settings page would be a dead end the user could never leave. It reads the
+   armed team's accent while the skin paints the host, and falls back to host
+   tokens once the skin stops painting. */
+.dsh-f1-master {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+  padding: 14px 16px 15px;
+  border: 1px solid var(--dsw-alias-border-l1);
+  border-left: 4px solid var(--f1-accent);
+  border-radius: var(--f1-card-radius);
+  background: color-mix(in srgb, var(--dsw-alias-bg-layer-1) 90%, var(--f1-accent) 10%);
+  transition: border-color .18s ease, background-color .18s ease;
+}
+.dsh-f1-master[data-f1-enabled="false"] {
+  border-left-color: var(--dsw-alias-border-l2);
+  background: var(--dsw-alias-bg-layer-1);
+}
+.dsh-f1-master__copy { min-width: 0; }
+.dsh-f1-master__eyebrow {
+  display: block;
+  color: var(--f1-accent-text);
+  font: 700 11px/1.2 var(--f1-font-display);
+  letter-spacing: .14em;
+}
+.dsh-f1-master[data-f1-enabled="false"] .dsh-f1-master__eyebrow { color: var(--dsw-alias-label-secondary); }
+.dsh-f1-master__title {
+  display: block;
+  margin-top: 5px;
+  font: 750 15px/1.2 var(--f1-font-display);
+  letter-spacing: .015em;
+}
+.dsh-f1-master__hint {
+  margin: 6px 0 0;
+  color: var(--dsw-alias-label-secondary);
+  font-size: 12px;
+  line-height: 18px;
+}
+.dsh-f1-switch {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  gap: 10px;
+  cursor: pointer;
+}
+.dsh-f1-switch input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+.dsh-f1-switch__track {
+  position: relative;
+  flex: none;
+  width: 46px;
+  height: 24px;
+  border: 1px solid var(--dsw-alias-border-l1);
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--dsw-alias-label-primary) 14%, transparent);
+  transition: background-color .18s ease, border-color .18s ease;
+}
+.dsh-f1-switch__thumb {
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: var(--dsw-alias-label-primary);
+  opacity: .5;
+  transition: transform .18s ease, background-color .18s ease, opacity .18s ease;
+}
+.dsh-f1-switch input:checked ~ .dsh-f1-switch__track {
+  border-color: var(--f1-accent);
+  background: var(--f1-accent);
+}
+.dsh-f1-switch input:checked ~ .dsh-f1-switch__track .dsh-f1-switch__thumb {
+  background: var(--f1-on-accent);
+  opacity: 1;
+  transform: translateX(22px);
+}
+.dsh-f1-switch input:focus-visible ~ .dsh-f1-switch__track {
+  outline: 2px solid var(--f1-accent);
+  outline-offset: 2px;
+}
+.dsh-f1-switch__state {
+  width: 48px;
+  color: var(--dsw-alias-label-secondary);
+  font: 700 12px/1 var(--f1-font-display);
+  text-align: right;
+}
+
+/* One rule, no exceptions: while the skin is off the master switch is the only
+   control that acts, so the rest is dimmed rather than left looking live. */
+.dsh-f1-settings[data-f1-enabled="false"] :where(.dsh-f1-settings__grid, .dsh-f1-settings__panel) {
+  opacity: .5;
+}
+.dsh-f1-settings[data-f1-enabled="false"] .dsh-f1-team-card { cursor: default; }
+
+/* Panel-only responsive layout. It lives with the always-on panel styles so the
+   settings page stays usable at every width while the skin is off. */
+@media (max-width: 760px) {
+  .dsh-f1-settings__grid { grid-template-columns: 1fr; }
+  .dsh-f1-settings__header { flex-direction: column; }
+  .dsh-f1-settings__status { align-self: flex-start; }
+  .dsh-f1-master { flex-direction: column; align-items: flex-start; }
+  .dsh-f1-setting {
+    grid-template-columns: minmax(92px, 1fr) minmax(110px, 1.5fr) 42px;
+    gap: 9px;
+  }
+}
+
+@media (max-width: 480px) {
+  .dsh-f1-settings__panel { padding: 12px; }
+  .dsh-f1-setting {
+    grid-template-columns: 1fr 44px;
+    padding-block: 8px;
+  }
+  .dsh-f1-setting input { grid-column: 1 / -1; grid-row: 2; }
+  .dsh-f1-setting output { grid-column: 2; grid-row: 1; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .dsh-f1-master,
+  .dsh-f1-switch__track,
+  .dsh-f1-switch__thumb { transition: none !important; }
+}
+
+html[data-f1-motion="off"] .dsh-f1-master,
+html[data-f1-motion="off"] .dsh-f1-switch__track,
+html[data-f1-motion="off"] .dsh-f1-switch__thumb { transition: none !important; }

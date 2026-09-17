@@ -1,0 +1,41 @@
+/* Always-on layer. This module ships in the settings stylesheet, which stays
+   mounted even while the skin is switched off, so it may only define
+   plugin-namespaced custom properties — never a declaration that can paint a
+   host element. scripts/check.mjs enforces that invariant: outside a `.dsh-f1-*`
+   rule, every declaration here must be a `--f1-*` custom property. */
+:root {
+  --f1-accent: var(--f1-accent-dark, #ffc800);
+  --f1-accent-text: var(--f1-accent-text-dark, #ffd84a);
+  --f1-success: var(--f1-success-dark, #00e701);
+  --f1-warning: var(--f1-warning-dark, #ffd400);
+  --f1-danger: var(--f1-danger-dark, #ff2e2e);
+  --f1-on-accent: var(--f1-on-accent-dark, #090c12);
+  --f1-photo-strength: 100%;
+  --f1-surface-strength: 78%;
+  --f1-blur: 14px;
+  --f1-cut: 9px;
+  --f1-font-display: 'Bahnschrift Condensed', 'Arial Narrow', ui-sans-serif, sans-serif;
+  --f1-font-body: 'Segoe UI Variable', Aptos, ui-sans-serif, sans-serif;
+  --f1-line: color-mix(in srgb, var(--f1-accent, #ffc800) 34%, transparent);
+  --f1-panel: var(--f1-panel-dark, #111722);
+  --f1-panel-2: var(--f1-panel-2-dark, #181f2a);
+  --f1-ink: #f5f7fa;
+  --f1-muted: #aeb5c0;
+  --f1-grid: rgba(255, 255, 255, .035);
+  --f1-grid-size: 44px;
+  --f1-card-radius: 8px;
+}
+
+html[data-f1-dark="false"] {
+  --f1-accent: var(--f1-accent-light, #9a7600);
+  --f1-accent-text: var(--f1-accent-text-light, #765a00);
+  --f1-success: var(--f1-success-light, #00853a);
+  --f1-warning: var(--f1-warning-light, #8a6200);
+  --f1-danger: var(--f1-danger-light, #bd1010);
+  --f1-on-accent: var(--f1-on-accent-light, #090c12);
+  --f1-panel: var(--f1-panel-light, #f5f6f8);
+  --f1-panel-2: var(--f1-panel-2-light, #ffffff);
+  --f1-ink: #15181e;
+  --f1-muted: #565d68;
+  --f1-grid: rgba(8, 12, 18, .035);
+}

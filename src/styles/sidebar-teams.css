@@ -49,30 +49,26 @@
   pointer-events: none;
 }
 
-/* The HARNESS wordmark is part of DSH's native brand-name SVG. Preserve the
-   complete 156px viewBox in every expanded team/theme state: no shrinking,
-   clipping, recolouring, or opacity inherited from decorative treatments. */
-.hHd-Xa_root:not(.hHd-Xa_collapsed) .hHd-Xa_brand.hHd-Xa_wide {
-  width: 202px;
-  min-width: 202px;
-  flex: 0 0 202px;
-  overflow: visible;
-}
-
-.hHd-Xa_root:not(.hHd-Xa_collapsed) .hHd-Xa_brandIdentity {
-  width: 188px;
-  min-width: 188px;
-  flex: 0 0 188px;
-  overflow: visible;
-}
-
+/* DSH renders the official lockup as two slots: the whale mark
+   (`sidebar.brand.mark`) and a wordmark SVG whose own artwork still contains the
+   whale, cropped away by `viewBox="26 0 156 24"`. Never un-clip that viewport:
+   `overflow: visible` on the wordmark repaints the cropped whale 26px to its
+   left, straight over the slotted mark, and the two copies visibly overlap.
+   The row is packed with `justify-content: flex-end`, so the brand and the
+   identity must keep their native flex behaviour as well — pinning them to
+   fixed widths turns the row into a fixed-width line that overflows to the
+   left, over the panel border and the team accent bar, on any sidebar narrower
+   than the sum of those widths. Pin only the wordmark: its complete 156x24
+   viewBox is preserved in every expanded team/theme state — never clipped,
+   recoloured, or faded by decorative treatments — and it gives way, the way
+   DSH itself degrades it, before the row overflows. */
 .hHd-Xa_root:not(.hHd-Xa_collapsed) .hHd-Xa_brandName {
   display: inline-flex !important;
-  width: 156px !important;
-  min-width: 156px;
+  flex: 0 1 156px;
+  width: 156px;
+  min-width: 0;
   height: 24px;
-  flex: 0 0 156px;
-  overflow: visible !important;
+  overflow: hidden !important;
   visibility: visible !important;
   color: var(--dsw-alias-label-primary) !important;
   opacity: 1 !important;
@@ -81,11 +77,12 @@
 
 .hHd-Xa_root:not(.hHd-Xa_collapsed) .hHd-Xa_brandName svg {
   display: block !important;
-  width: 156px !important;
-  min-width: 156px;
-  max-width: none !important;
+  flex: 0 1 auto;
+  width: 156px;
+  min-width: 0;
+  max-width: 100%;
   height: 24px !important;
-  overflow: visible !important;
+  overflow: hidden !important;
   visibility: visible !important;
   color: inherit !important;
   opacity: 1 !important;

@@ -2,6 +2,8 @@
 // src/teams.mjs data, the plugin fragment, and the embedded team logos;
 // cockpit photographs are staged into lib/cockpits/ and referenced by HTTP
 // URL so the host half can serve them at full resolution (no inlining cap).
+// Every text source is read with normalized newlines: the bundle is committed,
+// so a Windows checkout and a Linux CI run must produce identical bytes.
 // Zero dependencies: node scripts/build.mjs
 import { copyFileSync, existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
@@ -13,14 +15,24 @@ const root = join(dirname(fileURLToPath(import.meta.url)), "..");
 // Host route prefix that lib/routes.js registers — keep the two in sync.
 const ASSET_URL_PREFIX = "/plugin-assets/dsh-f1-skin";
 
-const STYLE_FILES = [
+// Two stylesheets with two lifetimes. The settings sheet must stay mounted even
+// while the skin is switched off (its page owns the switch that turns it back
+// on, and a dead end would be unrecoverable), so it is limited to
+// plugin-namespaced custom properties and `.dsh-f1-*`-scoped panel rules. Every
+// rule that can paint a host element belongs to the skin sheet, which the
+// runtime detaches the moment the master switch goes off.
+const PANEL_STYLE_FILES = [
+  "tokens.css",
+  "teams.css",
+  "controls.css"
+];
+
+const SKIN_STYLE_FILES = [
   "foundation.css",
   "background.css",
   "materials.css",
   "components.css",
   "sidebar-teams.css",
-  "controls.css",
-  "teams.css",
   "responsive.css"
 ];
 
@@ -61,10 +73,12 @@ const tokenMapSrc = "{\n" + Object.entries(data.TOKEN_MAP)
   .map(([name, spec]) => `    ${JSON.stringify(name)}: ${typeof spec === "function" ? spec.toString() : JSON.stringify(spec)}`)
   .join(",\n") + "\n  }";
 
-const fragment = readFileSync(join(root, "src", "plugin-fragment.js"), "utf8");
-const styles = STYLE_FILES
-  .map((file) => readFileSync(join(root, "src", "styles", file), "utf8").trim())
+const fragment = readFileSync(join(root, "src", "plugin-fragment.js"), "utf8").replace(/\r\n/g, "\n");
+const readStyles = (files) => files
+  .map((file) => readFileSync(join(root, "src", "styles", file), "utf8").trim().replace(/\r\n/g, "\n"))
   .join("\n\n");
+const panelStyles = readStyles(PANEL_STYLE_FILES);
+const skinStyles = readStyles(SKIN_STYLE_FILES);
 
 const bundle = `window.__ModuleLoader__.load({
   id: "dsh-f1-skin",
@@ -83,7 +97,8 @@ const bundle = `window.__ModuleLoader__.load({
     ${data.resolveSpec.toString()}
     ${data.makeTeamTokens.toString()}
     const TEAMS = ${JSON.stringify(teams)};
-    const F1_CSS = ${JSON.stringify(styles)};
+    const F1_PANEL_CSS = ${JSON.stringify(panelStyles)};
+    const F1_SKIN_CSS = ${JSON.stringify(skinStyles)};
 ${fragment}
     return module.exports;
   }
@@ -93,4 +108,4 @@ ${fragment}
 const out = join(root, "lib", "client.js");
 mkdirSync(join(root, "lib"), { recursive: true });
 writeFileSync(out, bundle, "utf8");
-console.log(`built lib/client.js (${Math.round(bundle.length / 1024)} KB, ${teams.length} teams, cockpit photos staged under lib/cockpits/)`);
+console.log(`built lib/client.js (${Math.round(bundle.length / 1024)} KB, ${teams.length} teams, ${PANEL_STYLE_FILES.length} settings + ${SKIN_STYLE_FILES.length} skin style modules, cockpit photos staged under lib/cockpits/)`);

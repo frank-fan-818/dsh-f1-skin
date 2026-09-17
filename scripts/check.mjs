@@ -6,9 +6,18 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 import * as data from "../src/teams.mjs";
 
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
-const STYLE_FILES = [
-  "foundation.css", "background.css", "materials.css", "components.css", "sidebar-teams.css",
-  "controls.css", "teams.css", "responsive.css"
+// The settings sheet is mounted for the whole session, the skin sheet only while
+// the skin is on. What each may contain is an invariant, not a convention: only
+// the skin sheet is allowed to paint a host element.
+const PANEL_STYLE_FILES = ["tokens.css", "teams.css", "controls.css"];
+const SKIN_STYLE_FILES = [
+  "foundation.css", "background.css", "materials.css", "components.css", "sidebar-teams.css", "responsive.css"
+];
+const STYLE_FILES = [...PANEL_STYLE_FILES, ...SKIN_STYLE_FILES];
+// Host class-name prefixes owned by the DSH client packages this skin decorates.
+const HOST_CLASS_PREFIXES = [
+  "pI_x6G_", "hHd-Xa_", "wSkVaW_", "pXSMma_", "YDXeBa_", "qDHVXG_", "VOzbGW_",
+  "hWmORq_", "Sxvs8a_", "uV2eYG_", "Sixlwa_", "gdEzaW_", "lcKema_", "QWLzlG_", "o3BgMG_", "CY-8Ka_"
 ];
 const MAX_BUNDLE_BYTES = 2_800_000;
 // Photographs are HTTP-served from lib/cockpits/ (browsers drop data: URIs
@@ -106,11 +115,13 @@ else ok("cockpit photographs staged under lib/cockpits/ for the host route");
 // ── CSS sanity ──
 const missingStyles = STYLE_FILES.filter((file) => !existsSync(join(root, "src", "styles", file)));
 if (missingStyles.length > 0) fail(`missing style modules: ${missingStyles.join(", ")}`);
-else ok(`${STYLE_FILES.length} style modules present`);
-const css = STYLE_FILES
-  .filter((file) => existsSync(join(root, "src", "styles", file)))
-  .map((file) => readFileSync(join(root, "src", "styles", file), "utf8"))
-  .join("\n");
+else ok(`${STYLE_FILES.length} style modules present (${PANEL_STYLE_FILES.length} settings + ${SKIN_STYLE_FILES.length} skin)`);
+const readStyles = (files) => files
+  .map((file) => readFileSync(join(root, "src", "styles", file), "utf8").trim().replace(/\r\n/g, "\n"))
+  .join("\n\n");
+const css = readStyles(STYLE_FILES);
+const panelCss = readStyles(PANEL_STYLE_FILES);
+const skinCss = readStyles(SKIN_STYLE_FILES);
 let depth = 0;
 for (const ch of css) {
   if (ch === "{") depth += 1;
@@ -119,6 +130,46 @@ for (const ch of css) {
 }
 if (depth !== 0) fail(`CSS braces unbalanced (depth ${depth})`);
 else ok("CSS braces balanced");
+
+// ── stylesheet lifetime invariants ──
+// A stylesheet that survives the off switch must not be able to paint the host,
+// so "off" can only mean "no rule present" rather than "a rule is overruled".
+const hostClass = HOST_CLASS_PREFIXES.find((prefix) => panelCss.includes(prefix));
+if (hostClass) fail(`settings stylesheet targets host class ${hostClass} — host rules belong to the skin stylesheet`);
+else ok("settings stylesheet targets no host class");
+{
+  // Innermost rule blocks, including rules nested one level inside @media.
+  const blocks = [];
+  const source = panelCss.replace(/\/\*[\s\S]*?\*\//g, "");
+  const stack = [];
+  let buffer = "";
+  for (const ch of source) {
+    if (ch === "{") { stack.push(buffer.trim()); buffer = ""; continue; }
+    if (ch === "}") {
+      blocks.push({ selector: stack[stack.length - 1], body: buffer });
+      stack.pop();
+      buffer = "";
+      continue;
+    }
+    buffer += ch;
+  }
+  const paintsHost = blocks.filter(({ selector, body }) => selector !== undefined
+    && !selector.includes(".dsh-f1-")
+    && body.split(";").some((declaration) => declaration.trim() !== "" && !declaration.trim().startsWith("--")));
+  if (paintsHost.length > 0) {
+    fail(`settings stylesheet declares non-custom properties outside .dsh-f1-* rules: ${paintsHost.map((b) => b.selector).join(" | ")}`);
+  } else {
+    ok(`settings stylesheet only sets custom properties outside its own panels (${blocks.length} rules checked)`);
+  }
+}
+const panelClassInSkin = SKIN_STYLE_FILES.filter((file) => readFileSync(join(root, "src", "styles", file), "utf8").includes(".dsh-f1-"));
+if (panelClassInSkin.length > 0) fail(`skin stylesheet styles the settings panel, which loses it while the skin is off: ${panelClassInSkin.join(", ")}`);
+else ok("skin stylesheet carries no settings-panel rules (the panel survives the off switch)");
+if (!skinCss.includes("body::before") || !skinCss.includes(".pI_x6G_frame")) fail("skin stylesheet lost its host coverage");
+else ok("skin stylesheet carries the host coverage that the off switch withdraws");
+if (!panelCss.includes(".dsh-f1-master") || !panelCss.includes(".dsh-f1-switch__track") || !panelCss.includes('.dsh-f1-settings[data-f1-enabled="false"]')) fail("settings stylesheet lacks the master switch");
+else ok("master switch, its control, and its off-state treatment are styled");
+
 if (!css.includes("prefers-reduced-motion")) fail("CSS lacks reduced-motion branch");
 else ok("prefers-reduced-motion branch present");
 if (!css.includes(".dsh-f1-settings") || !css.includes(".dsh-f1-team-card")) fail("CSS lacks native F1 settings section");
@@ -145,8 +196,19 @@ if (!css.includes(".wSkVaW_titleCluster::after") || !css.includes("RACE CONTROL"
 else ok("conversation header includes a noninteractive team signature");
 if (!css.includes(".wSkVaW_heroWorkspaceRow") || !css.includes("var(--f1-panel) 92%")) fail("hero workspace controls lack a readable local surface");
 else ok("hero workspace and preset controls have a readable local surface");
-if (!css.includes(".hHd-Xa_brandName svg") || !css.includes("width: 156px !important") || !css.includes("visibility: visible !important") || !css.includes("svg > rect + g path")) fail("native HARNESS wordmark lacks size or contrast guarantees");
+if (!css.includes(".hHd-Xa_brandName svg") || !css.includes("width: 156px") || !css.includes("visibility: visible !important") || !css.includes("svg > rect + g path")) fail("native HARNESS wordmark lacks size or contrast guarantees");
 else ok("native HARNESS wordmark keeps its full viewBox and inverted contrast");
+// DSH keeps its own whale inside the wordmark SVG and crops it away with the
+// viewBox. Un-clipping that viewport paints the cropped mark a second time,
+// straight over the independently slotted whale, and the two copies overlap.
+const cssRules = css.replace(/\/\*[\s\S]*?\*\//g, "");
+if (/\.hHd-Xa_brandName[^{}]*svg[^{}]*\{[^}]*overflow:\s*(?:visible|auto)/s.test(cssRules)) fail("wordmark SVG is un-clipped: the host's cropped whale mark is painted again over the slotted one");
+else ok("wordmark SVG stays clipped to its viewBox (no doubled whale mark)");
+// The row packs its children to the right, so pinning the brand or its identity
+// to a fixed width overflows the row leftwards — over the panel border and the
+// team accent bar — on any sidebar narrower than the sum of those widths.
+if (/\.hHd-Xa_brand(?![A-Za-z])[^{},]*\{[^}]*flex:\s*0\s+0/.test(cssRules) || /\.hHd-Xa_brandIdentity[^{},]*\{[^}]*flex:\s*0\s+0/.test(cssRules)) fail("brand row pins the brand to a fixed width and overflows a narrow sidebar");
+else ok("brand row keeps the host's flex behaviour instead of a fixed width");
 if (!css.includes(".hHd-Xa_root.hHd-Xa_collapsed .hHd-Xa_logoRow::after") || !css.includes('content: "HARNESS"') || !css.includes("writing-mode: vertical-rl")) fail("collapsed navigation loses the HARNESS identity");
 else ok("collapsed navigation preserves a noninteractive HARNESS mark");
 if (css.includes("repeating-linear-gradient")) fail("generic repeating stripe pattern returned");
@@ -167,7 +229,7 @@ if (css.includes("TEAM RADIO") || css.includes('content: "LIVE')) fail("CSS cont
 else ok("no simulated LIVE/TEAM RADIO telemetry");
 if (!css.includes("--f1-photo-strength") || !css.includes("--f1-surface-strength")) fail("CSS lacks independent photo/surface controls");
 else ok("photo and surface strength are independent");
-const runtime = readFileSync(join(root, "src", "plugin-fragment.js"), "utf8");
+const runtime = readFileSync(join(root, "src", "plugin-fragment.js"), "utf8").replace(/\r\n/g, "\n");
 if (!runtime.includes('stored === null || stored === ""')) fail("runtime does not protect numeric defaults from empty storage");
 else ok("empty storage preserves visual defaults");
 if (!runtime.includes("const runtime = {") || !runtime.includes("data-f1-instance") || !runtime.includes("runtime.source")) fail("runtime lacks per-apply ownership isolation");
@@ -178,6 +240,22 @@ if (runtime.includes("team.slot") || runtime.includes("team.code") || runtime.in
 else ok("settings render full team names without numeric slots or abbreviations");
 if (!runtime.includes("dsh-f1-skin:wallpapers") || !runtime.includes("/plugin-assets/dsh-f1-skin-custom/upload")) fail("runtime lacks per-team custom wallpaper plumbing");
 else ok("per-team custom wallpaper plumbing present");
+if (!runtime.includes('enabled: "dsh-f1-skin:enabled"') || !runtime.includes('return readStore(STORE.enabled) !== "off"')) fail("runtime lacks a persisted master switch that defaults to on");
+else ok("master switch state is stored and defaults to on");
+if (!runtime.includes('"data-f1-enabled"') || !runtime.includes("setEnabled(value)")) fail("runtime does not publish or accept the enabled state");
+else ok("runtime publishes the enabled state and exposes the toggle");
+if (!runtime.includes("function syncTokenLayer") || !runtime.includes('runtime.tokenDisposer = null;\n        runtime.tokenTeamId = null;\n        return;')) fail("token layer is not withdrawn when the skin is switched off");
+else ok("switching off withdraws the token layer instead of only hiding the stylesheet");
+if (!runtime.includes("function syncSkinSheet") || !runtime.includes("runtime.skinSheet.remove();") || !runtime.includes("document.head.appendChild(runtime.skinSheet)")) fail("skin stylesheet is not detached and reattached around the switch");
+else ok("skin stylesheet is detached while off and reattached while on");
+if (!runtime.includes("const skinTag = document.createElement") || !runtime.includes('"dsh-f1-skin/settings.css"') || !runtime.includes('"dsh-f1-skin/skin.css"')) fail("runtime does not inject the settings and skin stylesheets separately");
+else ok("settings and skin stylesheets are injected as separate, separately-lived tags");
+if (!runtime.includes('"aria-label": "启用 F1 车队皮肤"') || !runtime.includes('role: "switch"')) fail("master switch is not an accessible control");
+else ok("master switch is an accessible switch with a stable label");
+if (!runtime.includes("const off = !snapshot.enabled;") || !runtime.includes("disabled: off")) fail("skin-only controls are not gated by the master switch");
+else ok("skin-only controls are gated while the switch is off");
+if (!runtime.includes('root.setAttribute("data-f1-enabled"')) fail("root element does not carry the enabled state");
+else ok("root element carries data-f1-enabled for tests and inspection");
 
 // Version-tied CSS Module selectors are checked when this machine has DSH installed.
 const dshPackages = process.env.USERPROFILE
@@ -233,16 +311,13 @@ if (!existsSync(bundlePath)) {
   const newestInput = Math.max(...buildInputs.map((file) => statSync(file).mtimeMs));
   if (bundleTime + 1 < newestInput) fail("lib/client.js is stale — run: node scripts/build.mjs");
   else ok("lib/client.js is newer than its build inputs");
-  const cssLiteral = bundle.match(/const F1_CSS = ("(?:[^"\\]|\\.)*");\r?\n/);
-  if (cssLiteral === null) fail("bundle F1_CSS literal not found");
-  else {
-    const bundledCss = JSON.parse(cssLiteral[1]);
-    const sourceCss = STYLE_FILES
-      .map((file) => readFileSync(join(root, "src", "styles", file), "utf8").trim())
-      .join("\n\n");
-    if (bundledCss !== sourceCss) fail("bundle CSS differs from source style modules");
-    else ok("bundle CSS exactly matches source style modules");
-  }
+  const cssLiteral = bundle.match(/const F1_PANEL_CSS = ("(?:[^"\\]|\\.)*");\r?\n/);
+  const skinLiteral = bundle.match(/const F1_SKIN_CSS = ("(?:[^"\\]|\\.)*");\r?\n/);
+  if (cssLiteral === null) fail("bundle F1_PANEL_CSS literal not found");
+  else if (skinLiteral === null) fail("bundle F1_SKIN_CSS literal not found");
+  else if (JSON.parse(cssLiteral[1]) !== panelCss) fail("bundle settings stylesheet differs from source style modules");
+  else if (JSON.parse(skinLiteral[1]) !== skinCss) fail("bundle skin stylesheet differs from source style modules");
+  else ok("bundle settings and skin stylesheets exactly match their source style modules");
   if (!bundle.includes("window.__ModuleLoader__.load({")) fail("bundle lacks __ModuleLoader__ registration");
   else ok("bundle registers via window.__ModuleLoader__.load");
   if (!bundle.includes('id: "dsh-f1-skin"')) fail("bundle id is not dsh-f1-skin");

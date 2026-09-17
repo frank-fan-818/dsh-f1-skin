@@ -19,10 +19,40 @@ const overlaps = (a, b) => !(
   a.y + a.height <= b.y || b.y + b.height <= a.y
 );
 
+// The section is reached through DSH's own settings rail. Clicks are dispatched
+// on the native controls directly: a blank CI profile mounts a mandatory setup
+// layer, and this suite is scoped to plugin integration, not host onboarding.
+const openF1Settings = async (page) => {
+  const section = page.locator('.dsh-f1-settings[aria-label="Formula One 车队皮肤"]');
+  if (await section.isVisible().catch(() => false)) return section;
+
+  const settingsEntry = page.getByText("设置", { exact: true }).last();
+  await expect(settingsEntry).toBeVisible();
+  await settingsEntry.evaluate((element) => element.click());
+
+  const f1Entry = page.getByText("Formula One 车队", { exact: true }).last();
+  await expect(f1Entry).toBeVisible();
+  await f1Entry.evaluate((element) => element.click());
+
+  await expect(section).toBeVisible();
+  return section;
+};
+
+const skinSheet = 'style[data-plugin-css="dsh-f1-skin/skin.css"]';
+const settingsSheet = 'style[data-plugin-css="dsh-f1-skin/settings.css"]';
+// The photograph layer is the skin's own `body::before`; asserting on its
+// background keeps the check specific to this plugin.
+const photoLayer = (page) => page.locator("body")
+  .evaluate((body) => getComputedStyle(body, "::before").backgroundImage);
+const brandToken = (page) => page.locator("html").evaluate((root) =>
+  getComputedStyle(root).getPropertyValue("--dsw-alias-brand-primary").trim());
+
 test.beforeEach(async ({ page }) => {
   await page.goto("/");
   await expect(page.locator("html")).toHaveAttribute("data-f1-team", /^(redbull|ferrari|mclaren|mercedes)$/);
-  await expect(page.locator('style[data-plugin="dsh-f1-skin"]')).toHaveCount(1);
+  await expect(page.locator("html")).toHaveAttribute("data-f1-enabled", "true");
+  await expect(page.locator(skinSheet)).toHaveCount(1);
+  await expect(page.locator(settingsSheet)).toHaveCount(1);
 });
 
 for (const [id, name] of teams) {
@@ -76,17 +106,8 @@ test("settings remains above the composer and all four teams are operable", asyn
   const hasMandatoryHostLayer = await page
     .locator('[role="presentation"] > [aria-hidden="true"]:visible')
     .count() > 0;
-  const settingsEntry = page.getByText("设置", { exact: true }).last();
-  await expect(settingsEntry).toBeVisible();
-  // A blank CI profile has a mandatory DSH setup layer. Trigger the native
-  // rail controls directly so this test remains scoped to plugin integration.
-  await settingsEntry.evaluate((element) => element.click());
+  const section = await openF1Settings(page);
 
-  const f1Entry = page.getByText("Formula One 车队", { exact: true }).last();
-  await expect(f1Entry).toBeVisible();
-  await f1Entry.evaluate((element) => element.click());
-
-  const section = page.locator('.dsh-f1-settings[aria-label="Formula One 车队皮肤"]');
   const sectionBox = await box(section);
   const viewport = page.viewportSize();
   expect(viewport).not.toBeNull();
@@ -127,4 +148,90 @@ test("settings remains above the composer and all four teams are operable", asyn
       }
     }
   }
+});
+
+test("the official brand row keeps its mark inside the panel", async ({ page }, testInfo) => {
+  test.skip(testInfo.project.name === "compact", "The compact host layout intentionally collapses the rail.");
+
+  const geometry = await page.evaluate(() => {
+    const box = (selector) => document.querySelector(selector)?.getBoundingClientRect() ?? null;
+    const row = box(".hHd-Xa_logoRow");
+    const mark = box(".hHd-Xa_brandMark svg");
+    const name = box(".hHd-Xa_brandName svg");
+    if (row === null || mark === null || name === null) return null;
+    return {
+      rowLeft: row.left,
+      markLeft: mark.left,
+      markRight: mark.right,
+      markWidth: mark.width,
+      nameLeft: name.left,
+      nameWidth: name.width,
+      overflow: getComputedStyle(document.querySelector(".hHd-Xa_brandName svg")).overflow
+    };
+  });
+  // Not every supported host build splits the lockup into a slotted mark; the
+  // stylesheet invariants in scripts/check.mjs cover those builds instead.
+  test.skip(geometry === null, "this host build does not expose the slotted brand mark");
+
+  // The row packs its children to the right, so a fixed-width brand overflows to
+  // the left and drags the whale over the panel border and the accent bar.
+  expect(geometry.markLeft).toBeGreaterThanOrEqual(geometry.rowLeft);
+  expect(geometry.markWidth).toBeCloseTo(24, 0);
+  expect(geometry.nameLeft).toBeGreaterThanOrEqual(geometry.markRight);
+  expect(geometry.nameWidth).toBeCloseTo(156, 0);
+  // DSH crops its own whale out of the wordmark SVG; un-clipping that viewport
+  // paints a second copy of the mark over the slotted one.
+  expect(geometry.overflow).toBe("hidden");
+});
+
+test("the master switch restores the native host and survives a reload", async ({ page }, testInfo) => {
+  test.setTimeout(25_000);
+  test.skip(testInfo.project.name === "compact", "The compact host layout intentionally collapses the settings rail.");
+
+  const section = await openF1Settings(page);
+  const toggle = page.getByRole("switch", { name: "启用 F1 车队皮肤" });
+  await expect(toggle).toBeChecked();
+  await expect(section).toHaveAttribute("data-f1-enabled", "true");
+
+  const enabledBrand = await brandToken(page);
+  expect(enabledBrand).not.toBe("");
+  expect(await photoLayer(page)).toContain("dsh-f1-skin");
+
+  await toggle.evaluate((element) => element.click());
+
+  // The switch reports itself, the document, and the panel state at once.
+  await expect(toggle).not.toBeChecked();
+  await expect(page.locator("html")).toHaveAttribute("data-f1-enabled", "false");
+  await expect(section).toHaveAttribute("data-f1-enabled", "false");
+
+  // Off means the skin stylesheet is gone, not overruled, while the settings
+  // sheet stays mounted — the panel is the only way back.
+  await expect(page.locator(skinSheet)).toHaveCount(0);
+  await expect(page.locator(settingsSheet)).toHaveCount(1);
+  expect(await photoLayer(page)).not.toContain("dsh-f1-skin");
+
+  // The token layer is withdrawn too, so DSH's own brand colour is back.
+  expect(await brandToken(page)).not.toBe(enabledBrand);
+
+  // Every skin-only control is inert rather than silently ineffective.
+  await expect(page.locator(".dsh-f1-team-card").first()).toBeDisabled();
+  await expect(page.locator('.dsh-f1-setting input[type="range"]').first()).toBeDisabled();
+  await expect(toggle).toBeEnabled();
+
+  await page.reload();
+  await expect(page.locator("html")).toHaveAttribute("data-f1-enabled", "false");
+  await expect(page.locator(skinSheet)).toHaveCount(0);
+  await expect(page.locator(settingsSheet)).toHaveCount(1);
+
+  const reopened = await openF1Settings(page);
+  const restored = page.getByRole("switch", { name: "启用 F1 车队皮肤" });
+  await expect(restored).not.toBeChecked();
+  await restored.evaluate((element) => element.click());
+
+  await expect(page.locator("html")).toHaveAttribute("data-f1-enabled", "true");
+  await expect(reopened).toHaveAttribute("data-f1-enabled", "true");
+  await expect(restored).toBeChecked();
+  await expect(page.locator(skinSheet)).toHaveCount(1);
+  expect(await photoLayer(page)).toContain("dsh-f1-skin");
+  expect(await brandToken(page)).toBe(enabledBrand);
 });
